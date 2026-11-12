@@ -1,0 +1,12 @@
+﻿import { chromium } from "@playwright/test";
+const browser = await chromium.launch({ channel: "msedge", headless: true });
+const page = await browser.newPage();
+page.on("pageerror", (e) => console.log("PAGEERROR", e.message));
+page.on("console", (m) => { if (m.type() === "error") console.log("CONSOLE", m.text()); });
+await page.goto("http://127.0.0.1:5173/login");
+await page.getByLabel("Email address").fill("codex.qa.profile.sync@personal-expense.test");
+await page.getByLabel("Password", { exact: true }).fill("Temporary-QA-Only-528!");
+await page.getByRole("button", { name: /Sign in/ }).click();
+await page.waitForTimeout(3000);
+console.log("STATE", page.url(), (await page.locator("body").innerText()).slice(0, 1200));
+await browser.close();
