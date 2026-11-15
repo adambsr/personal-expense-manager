@@ -2,7 +2,6 @@ import argon2 from "argon2";
 import jwt from "jsonwebtoken";
 import { authConfig } from "../../config/auth";
 import { prisma } from "../../lib/prisma";
-import { ensureDefaultCategories } from "../categories/default-categories";
 import { isPrismaErrorCode } from "../../utils/prisma-errors";
 import type { LoginInput, RegisterInput, UpdateProfileInput } from "./auth.validation";
 
@@ -13,6 +12,7 @@ const safeUserSelect = {
   lastName: true,
   createdAt: true,
   avatarUpdatedAt: true,
+  role: true,
 };
 
 const avatarSelect = {
@@ -22,6 +22,7 @@ const avatarSelect = {
 
 const userForLoginSelect = {
   ...safeUserSelect,
+  isActive: true,
   passwordHash: true,
 };
 
@@ -36,7 +37,14 @@ export async function registerUser(input: RegisterInput) {
         data: { email: input.email, passwordHash },
         select: safeUserSelect,
       });
-      await ensureDefaultCategories(transaction, createdUser.id);
+      const categories = await transaction.globalCategory.findMany({
+        where: { enabledForNewUsers: true },
+        select: { name: true, type: true },
+      });
+      await transaction.category.createMany({
+        data: categories.map((category) => ({ ...category, userId: createdUser.id })),
+        skipDuplicates: true,
+      });
       return createdUser;
     });
 
@@ -56,11 +64,11 @@ export async function loginUser(input: LoginInput) {
     select: userForLoginSelect,
   });
 
-  if (!user || !(await argon2.verify(user.passwordHash, input.password))) {
+  if (!user) return null;
+  const passwordMatches = await argon2.verify(user.passwordHash, input.password);
+  if (!user.isActive || !passwordMatches) {
     return null;
   }
-
-  await prisma.$transaction((transaction) => ensureDefaultCategories(transaction, user.id));
 
   const accessToken = jwt.sign({}, authConfig.secret, {
     algorithm: "HS256",
@@ -79,6 +87,7 @@ export async function loginUser(input: LoginInput) {
       lastName: user.lastName,
       createdAt: user.createdAt,
       avatarUpdatedAt: user.avatarUpdatedAt,
+      role: user.role,
     },
   };
 }

@@ -11,6 +11,15 @@
       rel="stylesheet"
     />
     <meta name="theme-color" content="#f8f9ff" />
+    <script>
+      try {
+        const preference = localStorage.getItem("pem.color-mode");
+        const dark = preference === "dark" || (!preference && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", dark);
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0b1120" : "#f8f9ff");
+      } catch {}
+    </script>
     <meta name="description" content="A clear overview of your monthly income and expenses." />
     <title>Dashboard · Personal Expense Manager</title>
   </head>

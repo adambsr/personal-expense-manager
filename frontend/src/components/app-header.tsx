@@ -1,32 +1,15 @@
-import { useLayoutEffect, useState } from "react";
+import { useState } from "react";
 import { Menu, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AccountMenu } from "@/components/account-menu";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { DashboardSidebarContent, type SidebarPage } from "@/features/dashboard/dashboard-sidebar";
+import { useTheme } from "@/features/theme/use-theme";
 import { handleClientNavigation } from "@/lib/navigation";
 
-type ColorMode = "light" | "dark";
-const COLOR_MODE_STORAGE_KEY = "pem.color-mode";
-
-function initialColorMode(): ColorMode {
-  const preference = window.localStorage.getItem(COLOR_MODE_STORAGE_KEY);
-  if (preference === "light" || preference === "dark") return preference;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
 export function AppHeader({ activePage }: { activePage: SidebarPage }) {
-  const [colorMode, setColorMode] = useState<ColorMode>(initialColorMode);
+  const { colorMode, toggleColorMode } = useTheme();
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
-
-  function toggleColorMode() {
-    setColorMode((mode) => mode === "light" ? "dark" : "light");
-  }
-
-  useLayoutEffect(() => {
-    document.documentElement.classList.toggle("dark", colorMode === "dark");
-    window.localStorage.setItem(COLOR_MODE_STORAGE_KEY, colorMode);
-  }, [colorMode]);
 
   return (
     <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>

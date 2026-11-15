@@ -267,6 +267,10 @@ Configure backend environment variables in `backend/.env` (never commit this fil
 ```env
 DATABASE_URL="postgresql://expense_user:YOUR_LOCAL_PASSWORD@localhost:5432/expense_manager?schema=public"
 PORT=4000
+JWT_SECRET=replace_with_at_least_32_random_characters
+JWT_ACCESS_TOKEN_TTL_SECONDS=900
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=replace_with_a_unique_password_of_at_least_12_characters
 ```
 
 Create `backend/.env.example` with placeholders, not real secrets.
@@ -278,6 +282,12 @@ Use `npm run db:generate` to generate Prisma Client. Use `npm run db:migrate` to
 ### JWT/password configuration
 
 The backend uses Argon2id and JWT. Set `JWT_SECRET` to a unique random value with at least 32 characters in `backend/.env`; `JWT_ACCESS_TOKEN_TTL_SECONDS` defaults to 900 seconds. Keep this file private and use `backend/.env.example` only as a placeholder reference.
+
+Set `ADMIN_EMAIL` to a valid email and `ADMIN_PASSWORD` to a private password between 12 and 128 characters. After applying migrations, the API creates this administrator before accepting requests. On later starts, an existing administrator with that email is left unchanged. If the address belongs to a regular member, startup stops with an error; choose an unused email. Bootstrap never promotes an existing account or resets a password.
+
+### Administrator sign-in
+
+Apply pending migrations from `backend/` with `npm run db:migrate`, then start the API with `npm run dev`. Use the existing `/login` screen with the configured administrator email and password, then open `/admin`. Administrator credentials created in the Users page use an initial password selected by the creating administrator. Share it securely with the member; this application does not currently send email invitations or password reset links.
 
 ---
 

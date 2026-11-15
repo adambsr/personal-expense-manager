@@ -26,12 +26,16 @@ The project focuses on the everyday questions that can be hard to answer from sc
 - **Transaction discovery:** Search descriptions; filter by type, category, and date range; sort and paginate results.
 - **Categories:** Start with default income and expense categories, then create, rename, and delete personal categories.
 - **Profile:** Update first and last name, and upload or remove a JPEG, PNG, or WebP profile image.
+- **Light and dark themes:** Switch themes from the application header. The choice is saved in the browser; on the first visit, the application follows the device color preference. Theme styling also applies to sign-in, registration, and administration screens.
+- **Administration:** Administrators get an overview of application activity, can search and manage user accounts (including access roles and account activation), and manage global income and expense categories and whether they are added to new accounts.
 
 Recurring frequency is recorded with a transaction; the application does not automatically generate future transactions.
 
 ## Screenshots
 
 There are no verified screenshots of the running application in the repository yet. The images under [`designs/`](designs/) are design mockups, not screenshots of the current build, and include concepts that are not implemented. They are therefore not presented as the application's current interface here.
+
+To add screenshots later, capture the running application with representative sample data, remove or mask personal information, and save the images under a dedicated folder such as `screenshots/`. Replace this note with Markdown image links to those files, with a short caption for each screen and viewport (for example, dashboard — desktop, transactions — mobile, administration — desktop). Check that each image reflects the current build before committing it.
 
 ## Technology
 
@@ -65,9 +69,13 @@ PostgreSQL
 
 The backend groups HTTP routes, controllers, validation, and business operations by feature. Prisma models users, categories, and transactions; transaction amounts use `DECIMAL(12,2)`. Database migrations live in `backend/prisma/migrations/`.
 
+The administration area is available to accounts with the `ADMIN` role. It shares the application header and navigation, and provides an overview, user management, and global category management.
+
 ### API overview
 
 Private endpoints require an `Authorization: Bearer <token>` header.
+
+Every `/api/admin` endpoint also requires an authenticated administrator account.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
@@ -80,6 +88,11 @@ Private endpoints require an `Authorization: Bearer <token>` header.
 | `GET`, `POST` | `/api/transactions` | List (with filters and pagination) or create transactions |
 | `GET`, `PATCH`, `DELETE` | `/api/transactions/:transactionId` | Read, update, or delete a transaction |
 | `GET` | `/api/dashboard/summary` | Retrieve dashboard totals and cash-flow summaries |
+| `GET` | `/api/admin/overview` | Retrieve application-wide account, transaction, and activity summaries |
+| `GET`, `POST` | `/api/admin/users` | List and filter user accounts, or create an account |
+| `GET`, `PATCH` | `/api/admin/users/:userId` | Read account details or update the user's role and activation status |
+| `GET`, `POST` | `/api/admin/categories` | List or create global income and expense categories |
+| `PATCH` | `/api/admin/categories/:categoryId` | Update a global category and its default-onboarding setting |
 | `GET` | `/api/health` | Check API availability |
 
 ## Getting started

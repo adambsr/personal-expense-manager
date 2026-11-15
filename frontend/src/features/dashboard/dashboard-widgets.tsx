@@ -39,8 +39,8 @@ import {
 type DashboardTotals = DashboardSummary["totals"];
 
 const monthlySeriesColor = {
-  income: "#047857",
-  expenses: "#be123c",
+  income: "var(--chart-income)",
+  expenses: "var(--chart-expense)",
 };
 
 export function SummaryCards({ totals }: { totals: DashboardTotals }) {
@@ -150,19 +150,19 @@ function MonthlyComparison({
         <div className="comparison-chart" role="img" aria-label={`Income and expenses by ${chartMode} for ${selectedPeriod}`}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 8, right: 14, bottom: 0, left: 0 }}>
-              <CartesianGrid vertical={false} stroke="#e2e8f0" strokeDasharray="3 5" />
+              <CartesianGrid vertical={false} stroke="var(--chart-grid)" strokeDasharray="3 5" />
               <XAxis
                 dataKey="label"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: "#64748b", fontSize: chartMode === "monthly" ? 10 : 11, fontFamily: "Inter Variable, sans-serif" }}
+                tick={{ fill: "var(--chart-axis)", fontSize: chartMode === "monthly" ? 10 : 11, fontFamily: "Inter Variable, sans-serif" }}
                 dy={10}
               />
               <YAxis
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={formatChartAxisCents}
-                tick={{ fill: "#8a93a5", fontSize: 11, fontFamily: "Inter Variable, sans-serif" }}
+                tick={{ fill: "var(--chart-axis)", fontSize: 11, fontFamily: "Inter Variable, sans-serif" }}
                 width={86}
               />
               <Tooltip

@@ -7,12 +7,22 @@ const prismaMock = vi.hoisted(() => ({
   $transaction: vi.fn(),
   $queryRaw: vi.fn(),
   user: {
+    count: vi.fn(),
     create: vi.fn(),
     findUnique: vi.fn(),
+    findMany: vi.fn(),
     update: vi.fn(),
   },
+  globalCategory: {
+    count: vi.fn(),
+    create: vi.fn(),
+    findMany: vi.fn(),
+    update: vi.fn(),
+  },
+  adminAuditLog: { create: vi.fn() },
   category: {
     findMany: vi.fn(),
+    groupBy: vi.fn(),
     create: vi.fn(),
     createMany: vi.fn(),
     findFirst: vi.fn(),
@@ -34,6 +44,7 @@ const prismaMock = vi.hoisted(() => ({
 vi.mock("../src/lib/prisma", () => ({ prisma: prismaMock }));
 
 import app from "../src/app";
+import { bootstrapInitialAdministrator } from "../src/modules/admin/admin.service";
 
 const testSecret = "vitest-only-secret-with-at-least-thirty-two-characters-123456";
 const issuer = "personal-expense-manager-api";
@@ -58,6 +69,15 @@ beforeEach(async () => {
   prismaMock.$transaction.mockImplementation((callback) => callback(prismaMock));
   prismaMock.$queryRaw.mockResolvedValue([]);
   prismaMock.category.createMany.mockResolvedValue({ count: 19 });
+  prismaMock.user.findUnique.mockResolvedValue(safeUser());
+  prismaMock.user.count.mockResolvedValue(0);
+  prismaMock.user.findMany.mockResolvedValue([]);
+  prismaMock.globalCategory.findMany.mockResolvedValue([]);
+  prismaMock.globalCategory.count.mockResolvedValue(0);
+  prismaMock.adminAuditLog.create.mockResolvedValue({});
+  prismaMock.category.groupBy.mockResolvedValue([]);
+  prismaMock.transaction.findMany.mockResolvedValue([]);
+  prismaMock.transaction.count.mockResolvedValue(0);
   prismaMock.transaction.aggregate.mockResolvedValue({ _sum: { amount: null }, _count: { _all: 0 } });
   server = app.listen(0);
   await new Promise<void>((resolve, reject) => {
@@ -120,6 +140,8 @@ function safeUser(userId = userAId) {
     lastName: "Member",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     avatarUpdatedAt: null,
+    role: "USER",
+    isActive: true,
   };
 }
 
@@ -199,6 +221,15 @@ describe("authentication API", () => {
     expect(response.status).toBe(400);
     expect(body).toMatchObject({ error: { message: "Validation failed" } });
     expect(JSON.stringify(body)).not.toContain("short");
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+  });
+
+  it("does not allow public registration to request administrator privileges", async () => {
+    const response = await request("/api/auth/register", {
+      method: "POST",
+      body: { email: "member@example.com", password: testPassword, role: "ADMIN" },
+    });
+    expect(response.status).toBe(400);
     expect(prismaMock.user.create).not.toHaveBeenCalled();
   });
 
@@ -348,7 +379,7 @@ describe("authentication API", () => {
 
   it("serves only the authenticated user's stored image bytes", async () => {
     const image = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
-    prismaMock.user.findUnique.mockResolvedValue({ avatarData: image, avatarMimeType: "image/png" });
+    prismaMock.user.findUnique.mockResolvedValueOnce(safeUser()).mockResolvedValueOnce({ avatarData: image, avatarMimeType: "image/png" });
     const response = await request("/api/auth/me/avatar", { token: accessToken(userAId) });
 
     expect(response.status).toBe(200);
@@ -967,7 +998,6 @@ describe("dashboard summary API", () => {
   it("returns zero totals and empty collections for an empty month", async () => {
     prismaMock.transaction.groupBy.mockResolvedValue([]);
     prismaMock.transaction.findMany.mockResolvedValue([]);
-
     const response = await request("/api/dashboard/summary?month=2&year=2025", {
       token: accessToken(userAId),
     });
@@ -1144,6 +1174,7 @@ describe("dashboard summary API", () => {
 
     prismaMock.transaction.groupBy.mockResolvedValue([]);
     prismaMock.transaction.findMany.mockResolvedValue([]);
+    prismaMock.user.findUnique.mockResolvedValue(safeUser(userBId));
     const response = await request("/api/dashboard/summary?month=4&year=2025", {
       token: accessToken(userBId),
     });
@@ -1157,5 +1188,129 @@ describe("dashboard summary API", () => {
     );
     const chartQuery = prismaMock.$queryRaw.mock.calls[0]?.[0] as { values: unknown[] };
     expect(chartQuery.values).toContain(userBId);
+  });
+});
+
+describe("administrative API", () => {
+  it("rejects valid tokens for accounts that have been deactivated", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ ...safeUser(), isActive: false });
+    const response = await request("/api/admin/overview", { token: accessToken(userAId) });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toMatchObject({ error: { message: "Invalid or inactive account" } });
+  });
+
+  it("bootstraps an administrator once without changing its existing password", async () => {
+    const oldEmail = process.env.ADMIN_EMAIL;
+    const oldPassword = process.env.ADMIN_PASSWORD;
+    process.env.ADMIN_EMAIL = "bootstrap@example.com";
+    process.env.ADMIN_PASSWORD = "bootstrap-secret-long-enough";
+    prismaMock.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ role: "ADMIN", isActive: true });
+    prismaMock.user.create.mockResolvedValue({});
+
+    try {
+      expect(await bootstrapInitialAdministrator()).toBe("created");
+      expect(await bootstrapInitialAdministrator()).toBe("existing");
+      expect(prismaMock.user.create).toHaveBeenCalledTimes(1);
+      const createCall = prismaMock.user.create.mock.calls[0]?.[0] as { data: { passwordHash: string; role: string } };
+      expect(createCall.data.role).toBe("ADMIN");
+      expect(await argon2.verify(createCall.data.passwordHash, process.env.ADMIN_PASSWORD)).toBe(true);
+    } finally {
+      if (oldEmail === undefined) delete process.env.ADMIN_EMAIL;
+      else process.env.ADMIN_EMAIL = oldEmail;
+      if (oldPassword === undefined) delete process.env.ADMIN_PASSWORD;
+      else process.env.ADMIN_PASSWORD = oldPassword;
+    }
+  });
+
+  it("refuses to promote a regular member whose email matches the bootstrap setting", async () => {
+    const oldEmail = process.env.ADMIN_EMAIL;
+    const oldPassword = process.env.ADMIN_PASSWORD;
+    process.env.ADMIN_EMAIL = "member@example.com";
+    process.env.ADMIN_PASSWORD = "bootstrap-secret-long-enough";
+    prismaMock.user.findUnique.mockResolvedValue({ role: "USER" });
+    try {
+      await expect(bootstrapInitialAdministrator()).rejects.toThrow("existing accounts are never promoted");
+      expect(prismaMock.user.create).not.toHaveBeenCalled();
+      expect(prismaMock.user.update).not.toHaveBeenCalled();
+    } finally {
+      if (oldEmail === undefined) delete process.env.ADMIN_EMAIL;
+      else process.env.ADMIN_EMAIL = oldEmail;
+      if (oldPassword === undefined) delete process.env.ADMIN_PASSWORD;
+      else process.env.ADMIN_PASSWORD = oldPassword;
+    }
+  });
+
+  it("denies regular members access to all administrative routes", async () => {
+    const response = await request("/api/admin/overview", { token: accessToken(userAId) });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { message: "Administrator access required" } });
+  });
+
+  it("allows administrators to load overview data from database aggregates", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ ...safeUser(), role: "ADMIN" });
+    prismaMock.user.count.mockResolvedValue(1);
+    prismaMock.user.findMany.mockResolvedValue([]);
+    prismaMock.$queryRaw
+      .mockResolvedValueOnce([{ type: "INCOME", total: new Prisma.Decimal("1234.56") }, { type: "EXPENSE", total: new Prisma.Decimal("78.90") }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const response = await request("/api/admin/overview", { token: accessToken(userAId) });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ data: { totals: { users: 1, activeUsers: 1, transactions: 0, income: "1234.56", expenses: "78.90" } } });
+    expect(prismaMock.transaction.count).toHaveBeenCalledWith();
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(3);
+  });
+
+  it("creates an administrator account with a password hash and no credential disclosure", async () => {
+    prismaMock.user.findUnique.mockResolvedValue({ ...safeUser(), role: "ADMIN" });
+    prismaMock.user.create.mockResolvedValue({ ...safeUser(), role: "USER", _count: { transactions: 0 } });
+    const response = await request("/api/admin/users", {
+      method: "POST", token: accessToken(userAId),
+      body: { firstName: "New", lastName: "Member", email: "new@example.com", password: "long-temporary-secret", role: "USER" },
+    });
+    const payload = await response.json();
+    const createCall = prismaMock.user.create.mock.calls[0]?.[0] as { data: { passwordHash: string; password?: string } } | undefined;
+    expect(response.status).toBe(201);
+    expect(payload).not.toHaveProperty("data.user.passwordHash");
+    expect(payload).not.toHaveProperty("data.user.password");
+    expect(createCall?.data.password).toBeUndefined();
+    expect(await argon2.verify(createCall?.data.passwordHash ?? "", "long-temporary-secret")).toBe(true);
+  });
+
+  it("deactivates a member without deleting the account and keeps the action auditable", async () => {
+    prismaMock.user.findUnique
+      .mockResolvedValueOnce({ ...safeUser(), role: "ADMIN" })
+      .mockResolvedValueOnce({ ...safeUser(userBId), role: "USER", isActive: true });
+    prismaMock.user.update.mockResolvedValue({
+      ...safeUser(userBId),
+      role: "USER",
+      isActive: false,
+      _count: { transactions: 2 },
+    });
+
+    const response = await request(`/api/admin/users/${userBId}`, {
+      method: "PATCH",
+      token: accessToken(userAId),
+      body: { isActive: false },
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.data.user).toMatchObject({ id: userBId, isActive: false });
+    expect(prismaMock.user.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: userBId },
+      data: { isActive: false },
+    }));
+    const adminLockQuery = prismaMock.$queryRaw.mock.calls[0]?.[0] as Prisma.Sql | undefined;
+    expect(adminLockQuery?.sql).toContain("pg_advisory_xact_lock(71290461023)::text");
+    expect(prismaMock.adminAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        actorUserId: userAId,
+        action: "USER_ACCESS_UPDATED",
+        targetId: userBId,
+        details: { isActive: false },
+      }),
+    }));
   });
 });

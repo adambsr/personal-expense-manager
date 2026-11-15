@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { AppHeader } from "@/components/app-header";
 import DashboardPage from "@/features/dashboard/dashboard-page";
@@ -7,11 +7,15 @@ import AboutPage from "@/features/about/about-page";
 import ProfilePage from "@/features/profile/profile-page";
 import { AuthPage, SessionRestoreError } from "@/features/auth/auth-page";
 import { AuthProvider } from "@/features/auth/auth-provider";
+import { ThemeProvider } from "@/features/theme/theme-provider";
+import { useTheme } from "@/features/theme/use-theme";
 import { useAuth } from "@/features/auth/use-auth";
 import { signOut } from "@/features/auth/sign-out";
 import { navigateTo } from "@/lib/navigation";
 import { Toaster } from "sonner";
 import "./App.css";
+
+const AdminPage = lazy(() => import("@/features/admin/admin-page"));
 
 const SPLASH_SESSION_KEY = "pem.splash-seen";
 const SPLASH_DURATION_MS = 1_800;
@@ -23,6 +27,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/transactions": "Transactions · Personal Expense Manager",
   "/about": "About · Personal Expense Manager",
   "/profile": "My Profile · Personal Expense Manager",
+  "/admin": "Administration · Personal Expense Manager",
   "/login": "Sign in · Personal Expense Manager",
   "/register": "Create account · Personal Expense Manager",
 };
@@ -44,6 +49,7 @@ function AuthenticationRouter() {
   const [hasVisitedAbout, setHasVisitedAbout] = useState(pathname === "/about");
   const [hasVisitedProfile, setHasVisitedProfile] = useState(pathname === "/profile");
   const isAuthPath = pathname === "/login" || pathname === "/register";
+  const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
 
   useEffect(() => {
     const updatePathname = () => {
@@ -61,16 +67,18 @@ function AuthenticationRouter() {
   }, []);
 
   useEffect(() => {
-    document.title = PAGE_TITLES[pathname] ?? PAGE_TITLES["/"];
+    document.title = PAGE_TITLES[pathname.startsWith("/admin/") ? "/admin" : pathname] ?? PAGE_TITLES["/"];
   }, [pathname]);
 
   useEffect(() => {
     if (auth.status === "unauthenticated" && !isAuthPath) {
       navigateTo("/login", true);
     } else if (auth.status === "authenticated" && isAuthPath) {
+      navigateTo(auth.user?.role === "ADMIN" ? "/admin" : "/", true);
+    } else if (auth.status === "authenticated" && isAdminPath && auth.user?.role !== "ADMIN") {
       navigateTo("/", true);
     }
-  }, [auth.status, isAuthPath]);
+  }, [auth.status, isAuthPath, isAdminPath, auth.user?.role]);
 
   if (auth.status === "checking") return <SessionCheck />;
 
@@ -86,6 +94,23 @@ function AuthenticationRouter() {
 
   if (auth.status === "unauthenticated") {
     return <AuthPage mode={pathname === "/register" ? "register" : "login"} />;
+  }
+
+  if (isAdminPath) {
+    if (auth.user?.role !== "ADMIN") return <main className="session-check">This account cannot access the administration area.</main>;
+    const activeAdminPage = pathname.startsWith("/admin/users")
+      ? "Manage Users"
+      : pathname.startsWith("/admin/categories")
+        ? "Global Categories"
+        : "Admin Overview";
+    return (
+      <div className="authenticated-app">
+        <AppHeader activePage={activeAdminPage} />
+        <div className="authenticated-content">
+          <Suspense fallback={<SessionCheck />}><AdminPage /></Suspense>
+        </div>
+      </div>
+    );
   }
 
   const isTransactionsPage = pathname === "/transactions";
@@ -193,11 +218,16 @@ function AppExperience() {
   return <AuthenticationRouter />;
 }
 
-export default function App() {
+function AppContent() {
+  const { colorMode } = useTheme();
   return (
     <AuthProvider>
       <AppExperience />
-      <Toaster position="top-right" richColors />
+      <Toaster position="top-right" richColors theme={colorMode} />
     </AuthProvider>
   );
+}
+
+export default function App() {
+  return <ThemeProvider><AppContent /></ThemeProvider>;
 }

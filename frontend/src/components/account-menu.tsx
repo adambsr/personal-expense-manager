@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, LogOut, UserRound } from "lucide-react";
+import { ChevronDown, LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { ProfileAvatar } from "@/components/profile-avatar";
 import {
   DropdownMenu,
@@ -57,6 +57,10 @@ export function AccountMenu({ placement = "header" }: { placement?: "header" | "
           }}>
             <UserRound aria-hidden="true" /> My Profile
           </DropdownMenuItem>
+          {user.role === "ADMIN" ? <DropdownMenuItem onClick={() => {
+            setOpen(false);
+            navigateTo("/admin");
+          }}><ShieldCheck aria-hidden="true" /> Administration</DropdownMenuItem> : null}
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="profile-sign-out" onClick={() => signOut(logout)}>

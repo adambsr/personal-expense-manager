@@ -1,0 +1,6 @@
+-- AlterTable
+ALTER TABLE "AdminAuditLog" ALTER COLUMN "id" DROP DEFAULT;
+
+-- AlterTable
+ALTER TABLE "GlobalCategory" ALTER COLUMN "id" DROP DEFAULT,
+ALTER COLUMN "icon" SET DATA TYPE TEXT;

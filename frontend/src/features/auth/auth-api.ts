@@ -9,6 +9,7 @@ const userSchema = z.object({
   lastName: z.string(),
   createdAt: z.iso.datetime(),
   avatarUpdatedAt: z.iso.datetime().nullable(),
+  role: z.enum(["USER", "ADMIN"]),
 });
 
 const loginResponseSchema = z.object({
