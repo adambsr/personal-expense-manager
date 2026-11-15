@@ -148,6 +148,14 @@ npm run db:migrate
 
 `db:migrate` runs Prisma's development migration workflow. If you make a schema change during development, Prisma may ask for a migration name.
 
+To fill the site with local demonstration data, run this from `backend/` after migrations:
+
+```bash
+npm run db:seed:demo
+```
+
+This adds 50 fake member accounts, personal categories, and sample transactions spread across the last year without clearing existing records. It can be rerun safely. The demo login is `demo.user@example.com` with password `DemoFinance123!`; the other generated accounts use the same password. The script only permits a localhost database by default and is intended for local demonstrations.
+
 ### 3. Run the API and frontend
 
 Open two terminals from the project root.

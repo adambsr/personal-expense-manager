@@ -10,7 +10,8 @@
     "typecheck": "prisma generate && tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev"
+    "db:migrate": "prisma migrate dev",
+    "db:seed:demo": "tsx prisma/seed-demo.ts"
   },
   "keywords": [],
   "author": "",
